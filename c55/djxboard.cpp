@@ -417,7 +417,7 @@ struct Board : c55::Bus {
     uint16_t amb_rcw[6] = {0};
     unsigned amb_decoded = 0, amb_last_bits = 0;
     int amb_codec = -1;
-    FILE *amb_dump = getenv("TSIM_AMBEDUMP") ? fopen(getenv("TSIM_AMBEDUMP"), "wb") : nullptr;                               // decoder chosen from RATET / RATEP: 17 26 33 34 0
+    FILE *amb_dump = getenv("TSIM_AMBEDUMP") ? fopen(getenv("TSIM_AMBEDUMP"), "wb") : nullptr;                               // decoder chosen from RATET / RATEP: 0 17 22 26 31 33 34
     void amb_ctrl_reply(const std::vector<uint8_t> &r, uint8_t type)
     {
         amb_out(0x61); amb_out((uint8_t)(r.size() >> 8)); amb_out((uint8_t)r.size()); amb_out(type);
@@ -426,6 +426,20 @@ struct Board : c55::Bus {
     void amb_set_ratep()
     {
         uint16_t *w = amb_rcw;
+        // Match all six RATEP words for the additional T61 rates (DVSI AMBE-3000R
+        // manual, rate tables). The 0x01xx prefix alone does not mean rate 0.
+        static const struct { uint16_t words[6]; int rate; } rates[] = {
+            {{0x0128, 0x0663, 0x0000, 0x0000, 0x0000, 0x6428}, 31}, // TYP2 / TYP3: 2000
+            {{0x0130, 0x0763, 0x0001, 0x0000, 0x341A, 0x6750}, 22}, // TYP4: 2400 + 1600 FEC
+            {{0x0250, 0x0765, 0x0001, 0x0000, 0x542A, 0x5280}, 26}, // TYPX: 4000 + 2400 FEC
+        };
+        for (const auto &r : rates) {
+            if (std::equal(w, w + 6, r.words)) {
+                amb_codec = r.rate;
+                amb_rate = 0x100 | (unsigned)amb_codec;
+                return;
+            }
+        }
         if (w[0] == 0x0431 && w[1] == 0x0754) amb_codec = (w[2] == 0 && w[3] == 0) ? 34 : 33;   // AMBE+2 2450
         else if ((w[0] & 0xFF00) == 0x0100 || w[0] == 0x0130) amb_codec = 0;                    // AMBE 2400 (D-STAR)
         else amb_codec = -1;
@@ -434,7 +448,7 @@ struct Board : c55::Bus {
     void amb_set_ratet(int t)
     {
         amb_rate = (unsigned)t;
-        amb_codec = (t == 33 || t == 34 || t == 17 || t == 26 || t == 0 || t == 22) ? t : -1;
+        amb_codec = (t == 33 || t == 34 || t == 17 || t == 26 || t == 0 || t == 22 || t == 31) ? t : -1;
     }
     void amb_speech(const int16_t *pcm)
     {
@@ -507,6 +521,7 @@ struct Board : c55::Bus {
             case 34: blip25_decode_2450_thumbdv(&amb_dec, hard, pcm); break;
             case 33: blip25_decode_3600(&amb_dec, hard, pcm, &err); break;
             case 0: blip25_decode_ambeplus_r0(&amb_dec, hard, pcm); break;
+            case 31: blip25_decode_ambeplus_r31(&amb_dec, hard, pcm); break;
             case 17: blip25_decode_ambeplus_r17(&amb_dec, hard, pcm); break;
             case 26: blip25_decode_ambeplus_r26_chand(&amb_dec, hard, nbits, pcm, &err); break;
             case 22: blip25_decode_ambeplus_r22(&amb_dec, hard, pcm, &err); break;
