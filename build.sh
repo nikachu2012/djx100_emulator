@@ -21,9 +21,11 @@ for f in $AMBE/src/*.c; do
   b=$(basename "$f" .c)
   [ build/obj/ambe_$b.o -nt "$f" ] || zig cc -std=c99 -O2 -w -c "$f" -I$AMBE/include -I$AMBE/src -o build/obj/ambe_$b.o
 done
+# D-STAR（AMBE-2000 互換）の音声デコーダ: mbelib の 3600x2400。下のリンクで拾われるよう ambe_ を付ける
+zig cc -std=gnu99 -O2 -w -c third_party/mbelib/dstar.c -o build/obj/ambe_mbelib_dstar.o
 # C55x simulator + DJ-X100 DSP board
 for f in c55sim djxboard; do
-  $CXX -O3 -w -Ic55 -I$AMBE/include -c c55/$f.cpp -o build/obj/c55_$f.o
+  $CXX -O3 -w -Ic55 -I$AMBE/include -Ithird_party/mbelib -c c55/$f.cpp -o build/obj/c55_$f.o
 done
 $CXX -O2 -w -Ic55 c55/stock_test.cpp build/obj/c55_*.o build/obj/ambe_*.o -o build/stock_test.exe
 echo built build/stock_test.exe

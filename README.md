@@ -10,7 +10,8 @@ An emulator of the Alinco DJ-X100 receiver that runs **the radio's own firmware,
 * the CPU firmware (Renesas RX65N) on an RX simulator, with the radio's CPU board around it - LCD, key matrix, dial
   and volume encoders, EEPROM, DACs, port expander, the BK1068 broadcast receiver and the PC link,
 * the DSP firmware (TI TMS320C5517) on a C55x simulator, with the DSP board around it - IF ADC, audio codec, the I2C
-  link to the CPU and the AMBE-3000R vocoder chip (emulated with [ambe2-c](https://github.com/tallcat4/ambe2-c)),
+  link to the CPU and the AMBE-3000R vocoder chip (emulated with [ambe2-c](https://github.com/tallcat4/ambe2-c); D-STAR voice with
+  [mbelib](https://github.com/szechyjs/mbelib)),
 * an SDR as the antenna: SDR# / SDR++ IQ recordings, an rtl_tcp server or an RTL-SDR dongle on USB.
 
 The CPU firmware boots, reads its settings from the EEPROM, releases the DSP reset and sets the DSP up, draws the
@@ -60,6 +61,7 @@ python tools/make_test_iq.py analog                          # test signal: data
 python gui.py data/test_145000000Hz.wav --radio-freq 145.1   # boots, then types 145.1 + SET on the keypad
 python gui.py --usb                                          # antenna: RTL-SDR on USB (--usb-gain dB, default AGC)
 python gui.py --rtl 127.0.0.1:1234                           # antenna: rtl_tcp server
+python gui.py --usb --fullband                               # boots with the CPU input PJ0 high
 ```
 
 The left side of the window is the radio. Buttons are held like real keys (mouse down = key down).
@@ -91,6 +93,7 @@ file name (`..._145000000Hz...`).
 | `DJX_EEPROM` | EEPROM image (default `data/radio/eeprom.bin`) |
 | `C5500_CGT` | TI C5500 code generation tools |
 | `DJX_RTLSDR_DLL` | `rtlsdr.dll` (file or folder) |
+| `DJX_FULLBAND` | `1`: boots with the CPU input PJ0 high (same as `gui.py --fullband`) |
 
 ## Tests
 
@@ -116,6 +119,7 @@ The test scripts print PASS / FAIL (`radio_headless` and `stock_offline` print a
 | `stock/` | DSP listing tool (`mkcoff.py`), DSP tests, signal generator |
 | `tools/` | test signal maker, ADC model, boot image tool, LCD dump to PNG |
 | `third_party/ambe2-c` | AMBE+ / AMBE+2 decoder (MIT) |
+| `third_party/mbelib` | D-STAR voice decoder (ISC) |
 | `docs/internals.md` | how the radio is modelled, verification, debugging options |
 
 ## Limits
@@ -135,6 +139,7 @@ More in [docs/internals.md](docs/internals.md).
 |---|---|---|
 | `rx/gnu/*.c`, `*.h`, `rx/gnu/opcode/rx.h` | GNU binutils-gdb (`sim/rx`, `opcodes/rx-decode.c`, `include/opcode/rx.h`), Free Software Foundation; `mem.c`, `reg.c`, `rx.c` modified ([rx/gnu/README.md](rx/gnu/README.md)) | GPL-3.0-or-later |
 | `third_party/ambe2-c` | ambe2-c / blip25-vocoder; the mbelib-compatible API mirrors mbelib (ISC) | MIT |
+| `third_party/mbelib` | mbelib (D-STAR 3600x2400 only, [third_party/mbelib/VENDORED.md](third_party/mbelib/VENDORED.md)); `dstar.c` / `dstar.h` this project, with DSD's D-STAR interleave table (ISC) | ISC (`dstar.c`, `dstar.h`: GPL-3.0-or-later) |
 | everything else | this project | GPL-3.0-or-later |
 
 ## Disclaimer

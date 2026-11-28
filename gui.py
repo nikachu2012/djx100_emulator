@@ -712,9 +712,13 @@ def main():
     ap.add_argument('--lcd-scale', type=float, default=1.5, help='LCD zoom (320 x 240 pixels)')
     ap.add_argument('--radio-freq', help='type this frequency in MHz (e.g. 145.1) + SET on the keypad after boot '
                                          '(must lie on the radio\'s STEP grid)')
+    ap.add_argument('--fullband', action='store_true',
+                    help='boot with the CPU input PJ0 high')
     ap.add_argument('--shot', help='save a screenshot after --shot-after seconds and quit (testing)')
     ap.add_argument('--shot-after', type=float, default=8)
     a = ap.parse_args()
+    if a.fullband:
+        os.environ['DJX_FULLBAND'] = '1'       # DLL の CPU 基板モデルが起動時に読む
     root = tk.Tk()
     app = App(root, a)
     if a.seek and isinstance(app.e.src, D.WavSource):

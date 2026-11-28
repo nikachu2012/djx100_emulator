@@ -16,6 +16,7 @@
 extern "C" {
 #include "blip25.h"
 }
+#include "dstar.h"
 
 namespace {
 
@@ -61,6 +62,8 @@ struct Board : c55::Bus {
     uint8_t amb_pkt[400];
     int amb_len = 0, amb_need = 0;
     blip25_decoder amb_dec;
+    dstar_decoder *amb_dstar = dstar_new();             // D-STAR（AMBE-2000 互換）は ambe2-c に無いので mbelib
+    ~Board() { dstar_free(amb_dstar); }
     unsigned amb_rate = 0, amb_channel = 0, amb_bad = 0;
     bool amb_ready_sent = false;
     int amb_log_n = 0;
@@ -464,7 +467,7 @@ struct Board : c55::Bus {
                 if (n < 0 || f + n > end) { r.push_back(id); r.push_back(0); break; }
                 if (id == 0x09) amb_set_ratet(f[0]);
                 if (id == 0x0A) { for (int k = 0; k < 6; k++) amb_rcw[k] = (uint16_t)((f[2 * k] << 8) | f[2 * k + 1]); amb_set_ratep(); }
-                if (id == 0x0B) blip25_init(&amb_dec);
+                if (id == 0x0B) { blip25_init(&amb_dec); dstar_reset(amb_dstar); }
                 if (id == 0x31 || id == 0x30) {
                     static const char v[] = "V120.E100.XXXX.C106.G514.R009.B0010411.C0020208", pid[] = "AMBE3000R";
                     const char *t = id == 0x31 ? v : pid;
@@ -506,7 +509,14 @@ struct Board : c55::Bus {
             switch (c) {
             case 34: blip25_decode_2450_thumbdv(&amb_dec, hard, pcm); break;
             case 33: blip25_decode_3600(&amb_dec, hard, pcm, &err); break;
-            case 0: blip25_decode_ambeplus_r0(&amb_dec, hard, pcm); break;
+            case 0:
+                if (nbits == 72) {          // D-STAR（RATEP 0x0130 ... 0x0048）: 空中のバイトそのままの 72 ビット
+                    int fe = dstar_decode(amb_dstar, hard, pcm);
+                    if (amb_log) fprintf(stderr, "%.4f AMBE D-STAR fec %d\n", cpu.cycles / SYSCLK, fe);
+                } else {
+                    blip25_decode_ambeplus_r0(&amb_dec, hard, pcm);
+                }
+                break;
             case 17: blip25_decode_ambeplus_r17(&amb_dec, hard, pcm); break;
             case 26: blip25_decode_ambeplus_r26_chand(&amb_dec, hard, nbits, pcm, &err); break;
             case 22: blip25_decode_ambeplus_r22(&amb_dec, hard, pcm, &err); break;

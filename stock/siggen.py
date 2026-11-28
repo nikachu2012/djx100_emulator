@@ -318,13 +318,57 @@ def dstar_header_bits(my='JA1EMU  ', my2='X100', ur='CQCQCQ  ', rpt1='DIRECT  ',
     return out
 
 
-def dstar_tx(interleave_variant=0, frames=42, rng=None):
+# 音声フレームのインターリーブ（DSD と同じ表）: 空中のビット j -> C(W[j]) のビット X[j]
+_DSTAR_W = [0, 0, 3, 2, 1, 1, 0, 0, 1, 1, 0, 0, 3, 2, 1, 1, 3, 2, 1, 1, 0, 0, 3, 2] * 2 + \
+           [0, 0, 3, 2, 1, 1, 0, 0, 1, 1, 0, 0, 3, 2, 1, 1, 3, 3, 2, 1, 0, 0, 3, 3]
+_DSTAR_X = [10, 22, 11, 9, 10, 22, 11, 23, 8, 20, 9, 21, 10, 8, 9, 21, 8, 6, 7, 19, 8, 20, 9, 7,
+            6, 18, 7, 5, 6, 18, 7, 19, 4, 16, 5, 17, 6, 4, 5, 17, 4, 2, 3, 15, 4, 16, 5, 3,
+            2, 14, 3, 1, 2, 14, 3, 15, 0, 12, 1, 13, 2, 0, 1, 13, 0, 12, 10, 11, 0, 12, 1, 13]
+_GOLAY_GEN = [0x63A, 0x31D, 0x7B4, 0x3DA, 0x1ED, 0x6CC, 0x366, 0x1B3, 0x6E3, 0x54B, 0x49F, 0x475]
+
+
+def _golay2312(u):                                          # ビット 22..11 がデータ、10..0 がパリティ
+    p = 0
+    for i in range(12):
+        if u & (0x800 >> i):
+            p ^= _GOLAY_GEN[i]
+    return (u << 11) | p
+
+
+# 無音フレーム（空中の 9E8D3288261A3F61E8）の音声ビット。mbelib の ambe_d[49] の順
+DSTAR_SILENCE = [int(c) for c in '1111100001010100101010100100111011110100000001010']
+
+
+def dstar_voice_frame(d):
+    """音声ビット d（mbelib の ambe_d[49] の順。b0 = d0-5,48、ゲイン b2 = d6-9,42,43）-> FEC 1200 付きの空中の 9 バイト"""
+    u0 = int(''.join(map(str, d[0:12])), 2)
+    u1 = int(''.join(map(str, d[12:24])), 2)
+    c0, c1 = _golay2312(u0), _golay2312(u1)
+    fr = [[0] * 24 for _ in range(4)]
+    for i in range(23):
+        fr[0][i + 1] = (c0 >> i) & 1
+        fr[1][i] = (c1 >> i) & 1
+    fr[0][0] = bin(c0).count('1') & 1                       # Golay(24,12) の全体パリティ
+    pr = 16 * u0                                            # C1 は u0 から作る PN で変調
+    for j in range(22, -1, -1):
+        pr = (173 * pr + 13849) & 0xFFFF
+        fr[1][j] ^= pr >> 15
+    for i in range(11):
+        fr[2][10 - i] = d[24 + i]
+    for i in range(14):
+        fr[3][13 - i] = d[35 + i]
+    air = [fr[w][x] for w, x in zip(_DSTAR_W, _DSTAR_X)]
+    return bytes(sum(air[8 * k + i] << i for i in range(8)) for k in range(9))
+
+
+def dstar_tx(interleave_variant=0, frames=42, rng=None, voice=None):
+    """voice: 音声フレームの空中の 9 バイト（None なら乱数）"""
     rng = rng or np.random.default_rng(3)
     bits = [1, 0] * 64 + [1, 1, 1, 0, 1, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0]
     bits += dstar_header_bits(interleave_variant=interleave_variant)
     sync = [1, 0] * 5 + [1, 1, 0, 1, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0]
     for f in range(frames):                                 # 72 AMBE bits + 24 slow data bits
-        bits += list(rng.integers(0, 2, 72))
+        bits += list(rng.integers(0, 2, 72)) if voice is None else [(voice[i // 8] >> (i % 8)) & 1 for i in range(72)]
         bits += sync if f % 21 == 0 else list(rng.integers(0, 2, 24))
     bits += [1, 0] * 16 + [0, 0, 0, 1, 0, 0, 1, 1, 0, 1, 0, 1, 1, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0]   # end pattern
     nrz = nrz_upsample([1.0 if b else -1.0 for b in bits], 4800)

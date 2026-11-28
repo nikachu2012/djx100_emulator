@@ -331,7 +331,7 @@ struct Board {
     }
     Riic riic[3];
     // inputs of the board
-    uint8_t port_in[16];                    // PIDR values for input pins
+    uint8_t port_in[0x13];                  // PIDR values for input pins (P0..PF, PG, PH, PJ = 0x12)
     std::function<bool()> dsp_ready;
     bool dsp_clock = false;
     std::function<int()> dsp_heartbeat;     // DSP GPIO10 level (-1 = input); unset: modelled as a toggling clock
@@ -384,7 +384,13 @@ struct Board {
 
     Board()
     {
-        memset(port_in, 0xFF, sizeof port_in);
+        memset(port_in, 0xFF, 16);
+        memset(port_in + 16, 0x00, sizeof port_in - 16);   // PG / PH / PJ: Low（実機の通常状態に合わせる）
+        // P60: 主画面のアイコン選択にだけ使う入力（FUN_ffe217bb 0xFFE2565C）。PG5 = 0 かつ P60 = 1 で
+        // "⊘ENCR" を描く。実機は何も出ないので Low
+        port_in[6] &= (uint8_t)~0x01;
+        // PJ0: 起動時に読む入力（FUN_ffe1bf81 0xFFE1C0B4）。DJX_FULLBAND=1 で High
+        if (const char *fb = getenv("DJX_FULLBAND"); fb && strcmp(fb, "0") != 0) port_in[0x12] |= 0x01;
         for (auto &u : adc_in) for (auto &c : u) c = 0x800;
         for (int k = 0; k < 3; k++) {
             Riic &r = riic[k];
@@ -514,7 +520,7 @@ struct Board {
             uint32_t cnt = (uint32_t)((per - std::min(left, per)) / (div ? div : 1));
             v = (uint8_t)(a == 0xC1386 ? cnt : cnt >> 8);
         }
-        else if (a >= 0x8C040 && a < 0x8C050) {               // PIDRn: outputs read back, inputs from the board
+        else if (a >= 0x8C040 && a < 0x8C053) {               // PIDRn (P0..PJ): outputs read back, inputs from the board
             int n = (int)(a - 0x8C040);
             uint8_t dir = R(0x8C000 + (uint32_t)n), out = R(0x8C020 + (uint32_t)n);
             uint8_t in = port_in[n];

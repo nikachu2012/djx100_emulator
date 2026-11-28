@@ -11,7 +11,8 @@
   ダイヤル・音量エンコーダ、EEPROM、DAC、ポートエキスパンダ、FM 放送用受信 IC BK1068、PC リンク）があります。
 * DSP ファーム（TI TMS320C5517）を C55x シミュレータで動かします。周りには DSP 基板のモデル（IF の ADC、オーディオ
   コーデック、CPU との I2C リンク、ボコーダ IC AMBE-3000R）があります。AMBE-3000R は
-  [ambe2-c](https://github.com/tallcat4/ambe2-c) で再現しています。
+  [ambe2-c](https://github.com/tallcat4/ambe2-c) で再現しています（D-STAR の音声は
+  [mbelib](https://github.com/szechyjs/mbelib)）。
 * アンテナは SDR です。SDR# / SDR++ の IQ 録音、rtl_tcp サーバ、USB 接続の RTL-SDR ドングルが使えます。
 
 CPU ファームが起動して EEPROM から設定を読み、DSP のリセットを解除して DSP を設定し、本物の LCD を描画し、
@@ -60,6 +61,7 @@ python tools/make_test_iq.py analog                          # テスト信号 d
 python gui.py data/test_145000000Hz.wav --radio-freq 145.1   # 起動後にキーパッドで 145.1 + SET を入力
 python gui.py --usb                                          # アンテナ: USB の RTL-SDR（--usb-gain dB、既定は AGC）
 python gui.py --rtl 127.0.0.1:1234                           # アンテナ: rtl_tcp サーバ
+python gui.py --usb --fullband                               # CPU の入力 PJ0 を High にして起動
 ```
 
 ウィンドウの左側が無線機です。ボタンは本物のキーと同じく押している間だけ押下になります（マウスを押す = キーを押す）。
@@ -91,6 +93,7 @@ IQ の WAV ファイルは SDR# / SDR++ の録音（RIFF/RF64、uint8 / int16 / 
 | `DJX_EEPROM` | EEPROM イメージ（既定 `data/radio/eeprom.bin`） |
 | `C5500_CGT` | TI C5500 Code Generation Tools |
 | `DJX_RTLSDR_DLL` | `rtlsdr.dll`（ファイルかフォルダ） |
+| `DJX_FULLBAND` | `1` で CPU の入力 PJ0 を High にして起動（`gui.py --fullband` と同じ） |
 
 ## テスト
 
@@ -116,6 +119,7 @@ IQ の WAV ファイルは SDR# / SDR++ の録音（RIFF/RF64、uint8 / int16 / 
 | `stock/` | DSP の逆アセンブルリスト作成（`mkcoff.py`）、DSP のテスト、信号発生器 |
 | `tools/` | テスト信号の作成、ADC モデル、ブートイメージツール、LCD ダンプの PNG 変換 |
 | `third_party/ambe2-c` | AMBE+ / AMBE+2 デコーダ（MIT） |
+| `third_party/mbelib` | D-STAR の音声デコーダ（ISC） |
 | `docs/internals.md` | 無線機のモデル化の詳細、検証結果、デバッグ用オプション（英語） |
 
 ## 制限
@@ -136,6 +140,7 @@ IQ の WAV ファイルは SDR# / SDR++ の録音（RIFF/RF64、uint8 / int16 / 
 |---|---|---|
 | `rx/gnu/*.c`、`*.h`、`rx/gnu/opcode/rx.h` | GNU binutils-gdb（`sim/rx`、`opcodes/rx-decode.c`、`include/opcode/rx.h`、Free Software Foundation）。`mem.c`、`reg.c`、`rx.c` を改変（[rx/gnu/README.md](rx/gnu/README.md)） | GPL-3.0-or-later |
 | `third_party/ambe2-c` | ambe2-c / blip25-vocoder。mbelib 互換 API は mbelib（ISC）のインターフェースを再現 | MIT |
+| `third_party/mbelib` | mbelib（D-STAR の 3600x2400 のみ。[third_party/mbelib/VENDORED.md](third_party/mbelib/VENDORED.md)）。`dstar.c`、`dstar.h` はこのプロジェクトで、DSD の D-STAR インターリーブ表（ISC）を使用 | ISC（`dstar.c`、`dstar.h` は GPL-3.0-or-later） |
 | 上記以外 | このプロジェクト | GPL-3.0-or-later |
 
 ## 免責事項

@@ -3,8 +3,8 @@
     python stock/digital_test.py [workdir]
 
   D-STAR  GMSK 4800: radio header (callsigns, CRC, K=3 FEC, interleave, scrambler) -> "dcMY JA1EMU  UR CQCQCQ",
-          call start / end "ci"
-  AIS     GMSK 9600 HDLC NRZI, type 1 position report -> "ps <MMSI>,N35.599998,E139.699996,..."
+          call start / end "ci"; voice frames (Golay FEC, PN, interleave): silence frames quiet, voiced frames audible
+  AIS    GMSK 9600 HDLC NRZI, type 1 position report -> "ps <MMSI>,N35.599998,E139.699996,..."
   POCSAG  1200 bit/s FSK: sync / BCH decoding reached (the firmware only reports one special message format)
   DMR     BS-sourced voice LC header bursts: data sync found and BPTC decoding entered (informational: the LC of
           these synthetic bursts is not accepted yet)
@@ -27,8 +27,10 @@ import siggen as G  # noqa: E402
 EXE = os.path.join(ROOT, 'build', 'stock_test.exe')
 
 
-def run(u16, rs, secs, env=None, hits=None):
+def run(u16, rs, secs, env=None, hits=None, wav=None):
     e = dict(os.environ)
+    if wav:
+        e['TSIM_WAV'] = wav
     if hits:
         e.update(TSIM_PROF='1', TSIM_HITS=','.join('%06x' % h for h in hits))
     r = subprocess.run([EXE, D.stock_bin(), D.STOCK_DIS, u16, str(secs), 'vr', 'vr', rs], env=e, capture_output=True,
@@ -55,6 +57,24 @@ def main():
     good = any(l.startswith('dcMY JA1EMU  UR CQCQCQ') for l in lines) and any(l.startswith('ci1') for l in lines)
     ok &= good
     print(f'D-STAR  {"ok  " if good else "FAIL"} {lines[:3]}')
+
+    # D-STAR 音声: 無音フレームの呼は静か、有声フレーム（b0 60、ゲイン 50）の呼は音が出る
+    voiced = list(G.DSTAR_SILENCE)
+    for bits, pos in ((60, [0, 1, 2, 3, 4, 5, 48]), (50, [6, 7, 8, 9, 42, 43])):
+        for i, p in enumerate(pos):
+            voiced[p] = (bits >> (len(pos) - 1 - i)) & 1
+    calls = [G.dstar_tx(1, frames=60, voice=G.dstar_voice_frame(v)) for v in (G.DSTAR_SILENCE, voiced)]
+    x = np.concatenate([G.silence(1.5), calls[0], G.silence(0.5), calls[1], G.silence(0.3)])
+    G.adc_words(x).tofile(f)
+    wav = os.path.join(work, 'dstar.wav')
+    run(f, 'rsdr10009990000000000000', len(x) / G.FS, wav=wav)
+    au = np.frombuffer(open(wav, 'rb').read()[44:], np.int16).astype(float)
+    t_a = 1.5
+    t_b = t_a + len(calls[0]) / G.FS + 0.5
+    rms = [au[int((t + 0.5) * 48000):int((t + 1.2) * 48000)].std() for t in (t_a, t_b)]
+    good = rms[0] < 100 and rms[1] > 500
+    ok &= good
+    print(f'D-STAR  {"ok  " if good else "FAIL"} voice: silence frames rms {rms[0]:.0f}, voiced frames rms {rms[1]:.0f}')
 
     x = np.concatenate([G.silence(1.5)] + [np.concatenate([G.ais_tx(), G.silence(0.3)]) for _ in range(4)])
     G.adc_words(x).tofile(f)
