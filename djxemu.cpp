@@ -27,7 +27,11 @@
 #include "djxboard.h"
 #include "djxcpu.h"
 
+#ifdef _WIN32
 #define DJX_API extern "C" __declspec(dllexport)
+#else
+#define DJX_API extern "C" __attribute__((visibility("default")))
+#endif
 
 typedef std::complex<double> cd;
 

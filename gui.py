@@ -224,37 +224,53 @@ class App:
                     [('7', ''), ('8', ''), ('9', ''), ('V/M', 'MW')],
                     [('0', ''), ('.', 'SKIP'), ('SET', '\u2713'), ('SCAN', 'PROG')]]
 
+    @staticmethod
+    def radio_button(parent, text, bg, fg, active, press, release=None, **kw):
+        """\u7121\u7dda\u6a5f\u306e\u30ad\u30fc\u3002macOS \u306e tk.Button \u306f bg \u3068 relief \u3092\u7121\u8996\u3059\u308b\u306e\u3067 Label \u3067\u4f5c\u308b\u3002
+        \u62bc\u3057\u3066\u3044\u308b\u9593\u306f\u51f9\u307e\u305b\u3066\u8272\u3092\u5909\u3048\u3001press / release \u3092\u547c\u3076"""
+        b = tk.Label(parent, text=text, bg=bg, fg=fg, relief='raised', bd=2, cursor='hand2', **kw)
+
+        def down(ev):
+            b.configure(relief='sunken', bg=active)
+            press()
+
+        def up(ev):
+            b.configure(relief='raised', bg=bg)
+            if release:
+                release()
+        b.bind('<ButtonPress-1>', down)
+        b.bind('<ButtonRelease-1>', up)
+        return b
+
     def build_radio_panel(self):
         f = tk.Frame(self.root, bg=BODY, padx=14, pady=14)
         f.grid(row=0, column=0, sticky='ns')
         # top: volume ring and dial (encoders)
         top = tk.Frame(f, bg=BODY)
         top.grid(row=0, column=0, columnspan=2, sticky='e', pady=(0, 6))
-        eb = dict(bg='#2f4f6b', fg='white', activebackground='#41698d', relief='raised', bd=2, width=4,
-                  font=('Segoe UI', 10, 'bold'))
+        eb = dict(bg='#2f4f6b', fg='white', active='#41698d', width=4, font=('Segoe UI', 10, 'bold'))
         tk.Label(top, text='VOL ring', bg=BODY, fg='#aaa', font=('Segoe UI', 8)).pack(side='left', padx=(0, 2))
-        tk.Button(top, text='\u2212', command=lambda: self.radio_encoder(1, -1), **eb).pack(side='left')
-        tk.Button(top, text='+', command=lambda: self.radio_encoder(1, 1), **eb).pack(side='left', padx=(2, 12))
+        self.radio_button(top, '\u2212', press=lambda: self.radio_encoder(1, -1), **eb).pack(side='left')
+        self.radio_button(top, '+', press=lambda: self.radio_encoder(1, 1), **eb).pack(side='left', padx=(2, 12))
         tk.Label(top, text='DIAL', bg=BODY, fg='#aaa', font=('Segoe UI', 8)).pack(side='left', padx=(0, 2))
-        tk.Button(top, text='\u25bc', command=lambda: self.radio_encoder(0, -1), **eb).pack(side='left')
-        tk.Button(top, text='\u25b2', command=lambda: self.radio_encoder(0, 1), **eb).pack(side='left', padx=(2, 0))
+        self.radio_button(top, '\u25bc', press=lambda: self.radio_encoder(0, -1), **eb).pack(side='left')
+        self.radio_button(top, '\u25b2', press=lambda: self.radio_encoder(0, 1), **eb).pack(side='left', padx=(2, 0))
         # side keys (left side of the radio): MONI (SQL), FUNC (LOCK), POWER
         side = tk.Frame(f, bg=BODY)
         side.grid(row=1, column=0, sticky='n', padx=(0, 8))
-        sb = dict(width=6, bg='#3a3d42', fg='white', activebackground='#5b6067', relief='raised', bd=2,
-                  font=('Segoe UI', 9, 'bold'))
+        sb = dict(width=6, height=2, bg='#3a3d42', fg='white', active='#5b6067', font=('Segoe UI', 9, 'bold'))
         for name, sub in (('MONI/SQL', 'MONI\n(SQL)'), ('FUNC', 'FUNC\n(LOCK)')):
-            b = tk.Button(side, text=sub, height=2, **sb)
-            b.bind('<ButtonPress-1>', lambda ev, n=name: self.radio_key(n, True))
-            b.bind('<ButtonRelease-1>', lambda ev, n=name: self.radio_key(n, False))
+            b = self.radio_button(side, sub, press=lambda n=name: self.radio_key(n, True),
+                                  release=lambda n=name: self.radio_key(n, False), **sb)
             b.pack(pady=(26, 0) if name == 'MONI/SQL' else (10, 0))
         tk.Label(side, text='POWER\n(always on)', bg=BODY, fg='#777', font=('Segoe UI', 7)).pack(pady=(14, 0))
         body = tk.Frame(f, bg='#1b1c1e', padx=10, pady=10, highlightthickness=1, highlightbackground='#111')
         body.grid(row=1, column=1)
         w, h = int(320 * self.lcd_scale), int(240 * self.lcd_scale)
-        self.rlcd_blank = tk.PhotoImage(width=w, height=h)      # pixel size until the firmware draws the LCD
-        self.rlcd = tk.Label(body, bg='black', image=self.rlcd_blank, width=w, height=h, bd=0, highlightthickness=3,
-                             highlightbackground='#111')
+        # Canvas に描く（macOS の Tk 9 では Label の画像に余計な枠が重なるため）
+        self.rlcd = tk.Canvas(body, bg='black', width=w, height=h, bd=0, highlightthickness=3,
+                              highlightbackground='#111')
+        self.rlcd_item = self.rlcd.create_image(3, 3, anchor='nw')     # highlight の内側に置く
         self.rlcd.grid(row=0, column=0, pady=(0, 10))
         self.rlcd.bind('<MouseWheel>', self.on_radio_wheel)
         self.rlcd_img = None
@@ -267,11 +283,10 @@ class App:
                 cell.pack_propagate(False)
                 fn = c == 3 or sub
                 txt = (sub + '\n' if sub else '') + ('\u00b7' if name == '.' else name)
-                b = tk.Button(cell, text=txt,
-                              bg='#f4f4f4', fg='#111', activebackground='#dcdcdc', relief='raised', bd=2,
-                              font=('Segoe UI', 8 if fn else 13, 'bold'))
-                b.bind('<ButtonPress-1>', lambda ev, n=name: self.radio_key(n, True))
-                b.bind('<ButtonRelease-1>', lambda ev, n=name: self.radio_key(n, False))
+                b = self.radio_button(cell, txt, bg='#f4f4f4', fg='#111', active='#c4c4c4',
+                                      press=lambda n=name: self.radio_key(n, True),
+                                      release=lambda n=name: self.radio_key(n, False),
+                                      font=('Segoe UI', 8 if fn else 13, 'bold'))
                 b.pack(fill='both', expand=True)
         tk.Label(f, text='real CPU firmware: hold buttons like keys. keyboard: 0-9 . F=FUNC V=V/M S=SCAN M=MODE '
                          'T=STEP Enter=SET Esc=MONI\n\u2190/\u2192 or wheel on the LCD = dial, \u2191/\u2193 or '
@@ -341,7 +356,7 @@ class App:
                         im = im.resize((int(320 * self.lcd_scale), int(240 * self.lcd_scale)),
                                        Image.NEAREST if float(self.lcd_scale).is_integer() else Image.BILINEAR)
                     self.rlcd_img = ImageTk.PhotoImage(im)
-                    self.rlcd.configure(image=self.rlcd_img, width=im.width, height=im.height)
+                    self.rlcd.itemconfigure(self.rlcd_item, image=self.rlcd_img)
             except ImportError:
                 self.log('the radio LCD needs Pillow (pip install pillow)')
                 return
@@ -719,6 +734,8 @@ def main():
     app = App(root, a)
     if a.seek and isinstance(app.e.src, D.WavSource):
         app.e.src.seek(a.seek)
+    if a.shot and sys.platform != 'win32':
+        ap.error('--shot is Windows only (PrintWindow)')
     if a.shot:
         def shot():
             # capture only this window's own pixels (PrintWindow), never other windows on the screen

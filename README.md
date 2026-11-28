@@ -22,14 +22,18 @@ AIS, ACARS, POCSAG, 12 kHz IF) with the radio's own filters and decoders.
 
 ## Requirements
 
-* Windows (x86-64)
-* [zig](https://ziglang.org) (C/C++ compiler; tested with 0.17) and a bash shell (Git Bash) for `build.sh`
+* Windows (x86-64) or macOS (Apple silicon)
+* [zig](https://ziglang.org) (C/C++ compiler; tested with 0.17) and a bash shell (Git Bash on Windows) for `build.sh`.
+  On macOS, `mise install` in this folder installs zig and Python and makes `.venv` (`mise.toml`)
 * Python 3 (tested with 3.14) with `pip install numpy scipy pillow sounddevice`
 * TI's **C5500 code generation tools** (free from TI; `C5500_CGT`, default `~/tools/ti-cgt-c5500`): used once to
   disassemble the DSP firmware, because the DSP simulator decodes instructions from TI's own disassembler listing
+  On Apple silicon the Mac build of the tools (i386) does not run: install the Linux build (4.4.1) into
+  `~/tools/ti-cgt-c5500-linux` in a `linux/386` container (Docker / OrbStack) and link `tools/cgt_docker.sh` as
+  `~/tools/ti-cgt-c5500/bin/cl55` and `dis55`
 * the firmware files (below)
 * optional: an RTL-SDR dongle (`rtlsdr.dll` + `libusb-1.0.dll` from SDR# / SDR++ / rtl-sdr releases, WinUSB driver
-  via Zadig)
+  via Zadig; on macOS `brew install librtlsdr`)
 
 ## Setup
 
@@ -48,7 +52,8 @@ AIS, ACARS, POCSAG, 12 kHz IF) with the radio's own filters and decoders.
    ```
 
    This builds `build/djxemu.dll` (the emulator core used by the GUI) and the command-line tools
-   (`radio_test.exe`, `cpu_test.exe`, `stock_test.exe`), and makes the DSP listing
+   (`radio_test.exe`, `cpu_test.exe`, `stock_test.exe`) - on macOS `build/djxemu.dylib` and the tools without
+   `.exe` (run under mise: `mise exec -- bash build.sh`) - and makes the DSP listing
    `build/stock/DigRxx107_r.dis` with the TI tools (or by hand:
    `python stock/mkcoff.py firmware/DigRxx107.bin build/stock`). Every instruction decoded from the listing is
    checked byte for byte against the firmware image.

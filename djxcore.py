@@ -11,7 +11,9 @@ import numpy as np
 from scipy import signal
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-DLL = os.environ.get('DJX_DLL') or os.path.join(HERE, 'build', 'djxemu.dll')
+# build.sh の出力名: Windows は DLL/EXE、macOS は dylib と拡張子なしの実行ファイル
+LIB_EXT, EXE_EXT = ('.dylib', '') if sys.platform == 'darwin' else ('.dll', '.exe')
+DLL = os.environ.get('DJX_DLL') or os.path.join(HERE, 'build', 'djxemu' + LIB_EXT)
 
 # receiver channel of the core: the main receiver (IF -> ADC -> DSP) or the BK1068 broadcast receiver (WFM model)
 MODE_FM, MODE_WFM = 1, 4
@@ -435,19 +437,23 @@ def find_rtlsdr_dll():
     """rtlsdr.dll: DJX_RTLSDR_DLL (file or folder), data/rtlsdr/, PATH, or the copy shipped with SDR# / SDR++ / rtl-sdr
     releases in the usual places (it needs libusb-1.0.dll next to it and the WinUSB driver on the dongle, e.g. Zadig)"""
     import glob
+    name = 'librtlsdr.dylib' if sys.platform == 'darwin' else 'rtlsdr.dll'
     c = []
     e = os.environ.get('DJX_RTLSDR_DLL')
     if e:
-        c.append(os.path.join(e, 'rtlsdr.dll') if os.path.isdir(e) else e)
-    c.append(os.path.join(ROOT, 'data', 'rtlsdr', 'rtlsdr.dll'))
+        c.append(os.path.join(e, name) if os.path.isdir(e) else e)
+    c.append(os.path.join(ROOT, 'data', 'rtlsdr', name))
+    if sys.platform == 'darwin':
+        # Homebrew (brew install librtlsdr)
+        c += [os.path.join(d, 'lib', name) for d in ('/opt/homebrew', '/usr/local')]
     for d in os.environ.get('PATH', '').split(os.pathsep):
         if d:
-            c.append(os.path.join(d, 'rtlsdr.dll'))
+            c.append(os.path.join(d, name))
     home = os.path.expanduser('~')
     for base in (os.path.join(home, 'Downloads'), os.path.join(home, 'Desktop'), home, 'C:/Program Files',
                  'C:/Program Files (x86)', 'C:/tools', 'C:/SDR'):
         for depth in ('*', '*/*', '*/*/*'):
-            c += sorted(glob.glob(os.path.join(base, depth, 'rtlsdr.dll')))
+            c += sorted(glob.glob(os.path.join(base, depth, name)))
     for f in c:
         if f and os.path.isfile(f):
             return os.path.abspath(f)
@@ -462,7 +468,8 @@ class RtlUsbSource:
         import threading
         dll = dll or find_rtlsdr_dll()
         if not dll:
-            raise OSError('rtlsdr.dll not found (set DJX_RTLSDR_DLL or copy rtlsdr.dll + libusb-1.0.dll to data/rtlsdr/)')
+            raise OSError('rtlsdr library not found (set DJX_RTLSDR_DLL, copy rtlsdr.dll + libusb-1.0.dll to data/rtlsdr/, '
+                          'or on macOS: brew install librtlsdr)')
         d = os.path.dirname(dll)
         if hasattr(os, 'add_dll_directory'):
             self._dlldir = os.add_dll_directory(d)

@@ -23,14 +23,18 @@ CPU ファームが起動して EEPROM から設定を読み、DSP のリセッ�
 
 ## 必要なもの
 
-* Windows（x86-64）
-* [zig](https://ziglang.org)（C/C++ コンパイラ。0.17 で確認）と、`build.sh` を動かす bash（Git Bash）
+* Windows（x86-64）または macOS（Apple シリコン）
+* [zig](https://ziglang.org)（C/C++ コンパイラ。0.17 で確認）と、`build.sh` を動かす bash（Windows では Git Bash）。
+  macOS ではこのフォルダで `mise install` を実行すると zig と Python が入り、`.venv` が作られます（`mise.toml`）
 * Python 3（3.14 で確認）と `pip install numpy scipy pillow sounddevice`
 * TI の **C5500 Code Generation Tools**（TI から無償で入手できます。`C5500_CGT`、既定は `~/tools/ti-cgt-c5500`）。
   DSP シミュレータは TI 自身の逆アセンブラの出力から命令を解読するので、DSP ファームの逆アセンブルに 1 回だけ使います。
+  Apple シリコンでは Mac 版（i386）が動きません。Linux 版（4.4.1）を `linux/386` コンテナ（Docker / OrbStack）で
+  `~/tools/ti-cgt-c5500-linux` にインストールし、`tools/cgt_docker.sh` を `~/tools/ti-cgt-c5500/bin/cl55` と
+  `dis55` としてリンクします。
 * ファームウェアのファイル（下記）
 * 任意: RTL-SDR ドングル（SDR# / SDR++ / rtl-sdr の配布物にある `rtlsdr.dll` と `libusb-1.0.dll`、Zadig で入れる
-  WinUSB ドライバ）
+  WinUSB ドライバ。macOS では `brew install librtlsdr`）
 
 ## 準備
 
@@ -49,7 +53,7 @@ CPU ファームが起動して EEPROM から設定を読み、DSP のリセッ�
    ```
 
    `build/djxemu.dll`（GUI が使うエミュレータ本体）とコマンドラインツール（`radio_test.exe`、`cpu_test.exe`、
-   `stock_test.exe`）ができ、TI のツールで DSP の逆アセンブルリスト `build/stock/DigRxx107_r.dis` が作られます
+   `stock_test.exe`）ができ（macOS では `build/djxemu.dylib` と拡張子なしのツール。`mise exec -- bash build.sh` で実行）、TI のツールで DSP の逆アセンブルリスト `build/stock/DigRxx107_r.dis` が作られます
    （手動なら `python stock/mkcoff.py firmware/DigRxx107.bin build/stock`）。リストから解読した命令は、すべて
    ファームのイメージとバイト単位で照合します。
 

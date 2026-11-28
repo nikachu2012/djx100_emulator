@@ -26,7 +26,8 @@ open(os.path.join(out, base + '.cmd'), 'w').write('\n'.join(cmd) + '\n')
 
 
 def run(*a):
-    r = subprocess.run(a, cwd=out, capture_output=True, text=True)
+    # Linux 版 dis55 は不正な SWAP のオペランドに未初期化のバイトを出すので、デコードできない文字は置換する
+    r = subprocess.run(a, cwd=out, capture_output=True, text=True, errors='replace')
     if r.returncode:
         sys.exit(r.stdout + r.stderr)
     return r.stdout

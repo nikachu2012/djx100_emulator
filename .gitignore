@@ -12,3 +12,4 @@ data/
 *.dis
 *.map
 tsim_profile.txt
+.venv/

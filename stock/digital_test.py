@@ -24,7 +24,7 @@ sys.path.insert(0, os.path.join(HERE, '..'))
 import djxcore as D  # noqa: E402
 import siggen as G  # noqa: E402
 
-EXE = os.path.join(ROOT, 'build', 'stock_test.exe')
+EXE = os.path.join(ROOT, 'build', 'stock_test' + D.EXE_EXT)
 
 
 def run(u16, rs, secs, env=None, hits=None):
